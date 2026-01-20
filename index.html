@@ -36,6 +36,7 @@ h1{color:#ff5252}
 }
 .option:hover{background:#2a5298}
 .wrong{background:#e74c3c!important;animation:shake .4s}
+.correct{background:#2ecc71!important}
 
 .statement{
  background:#102542;padding:12px;
@@ -65,14 +66,6 @@ button{
  50%{transform:translateX(6px)}
  75%{transform:translateX(-6px)}
 }
-
-#msg{
- position:fixed;top:40%;left:50%;
- transform:translate(-50%,-50%);
- background:#c62828;
- padding:20px 30px;
- border-radius:20px;font-size:22px
-}
 </style>
 </head>
 <body>
@@ -82,56 +75,58 @@ button{
 <div id="home"><div id="bags"></div></div>
 <div id="question" class="hidden"><div id="questionBox"></div></div>
 <div id="success" class="hidden"><div id="virus">🦠</div><h2>TIÊU DIỆT THÀNH CÔNG!</h2></div>
-<div id="msg" class="hidden">❌ TIÊU DIỆT THẤT BẠI</div>
 
 <audio id="sound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_2c7e6d9b1b.mp3"></audio>
 
 <script>
-const bagsDiv = document.getElementById("bags");
-const qBox = document.getElementById("questionBox");
-const home = document.getElementById("home");
-const question = document.getElementById("question");
-const successBox = document.getElementById("success");
-const msg = document.getElementById("msg");
-const sound = document.getElementById("sound");
+const bagsDiv=document.getElementById("bags");
+const qBox=document.getElementById("questionBox");
+const home=document.getElementById("home");
+const question=document.getElementById("question");
+const successBox=document.getElementById("success");
+const sound=document.getElementById("sound");
 
-let destroyedBags = [];
-let usedQuestions = [];   // ❗ ĐÃ DÙNG → KHÔNG LẶP
+let destroyed=[];
 
-const shuffle = a => a.sort(() => Math.random() - 0.5);
+/* ===== CÂU HỎI – ĐÁP ÁN CHUẨN ===== */
+let pool=[
+ {type:"mc",q:"Gen đột biến phổ biến nhất trong ung thư người?",
+  o:["p53","rRNA","tRNA","lacZ"],a:0},
 
-/* ===================== DATA CÂU HỎI ===================== */
-let questionPool = shuffle([
- // ABCD
- {type:"mc",q:"Gen đột biến phổ biến nhất trong ung thư người?",o:["p53","rRNA","tRNA","lacZ"],a:"p53"},
- {type:"mc",q:"Oncogene có nguồn gốc từ?",o:["Proto-oncogene","Plasmid","Operon","Gen cấu trúc"],a:"Proto-oncogene"},
- {type:"mc",q:"Cơ chế chính của xạ trị ung thư?",o:["Gây đứt gãy DNA","Đông protein","Phá màng tế bào","Ức chế ribosome"],a:"Gây đứt gãy DNA"},
+ {type:"mc",q:"Oncogene có nguồn gốc từ?",
+  o:["Proto-oncogene","Plasmid","Operon","Gen cấu trúc"],a:0},
 
- // Trả lời ngắn
- {type:"short",q:"Quá trình tế bào tự chết có kiểm soát gọi là gì?",a:"apoptosis"},
- {type:"short",q:"Gen ức chế khối u liên quan ung thư vú di truyền?",a:"brca1"},
- {type:"short",q:"Đột biến xảy ra ở tế bào soma gọi là gì?",a:"đột biến soma"},
+ {type:"mc",q:"Cơ chế chính của xạ trị ung thư?",
+  o:["Gây đứt gãy mạch đôi DNA","Đông protein","Phá màng tế bào","Ức chế ribosome"],a:0},
 
- // Đúng / Sai
+ {type:"short",q:"Quá trình tế bào tự chết có kiểm soát gọi là gì?",
+  a:"apoptosis"},
+
+ {type:"short",q:"Gen ức chế khối u liên quan ung thư vú di truyền?",
+  a:"brca1"},
+
+ {type:"short",q:"Đột biến xảy ra ở tế bào soma gọi là gì?",
+  a:"đột biến soma"},
+
  {type:"tf",q:"Cơ chế phân tử của ung thư",s:[
   ["Đột biến p53 làm mất kiểm soát chu kì tế bào",true],
   ["Oncogene cần cả hai alen bị đột biến",false],
   ["Apoptosis thường bị ức chế trong tế bào ung thư",true],
   ["Ung thư không liên quan đến đột biến DNA",false]
  ]},
+
  {type:"tf",q:"Điều trị ung thư hiện đại",s:[
   ["Xạ trị gây đứt gãy mạch đôi DNA",true],
   ["Hóa trị chỉ tác động tế bào ung thư",false],
   ["Miễn dịch trị liệu kích hoạt tế bào T",true],
   ["Liệu pháp đích nhắm protein đặc hiệu",true]
  ]}
-]);
+];
 
-/* ===================== RENDER TÚI ===================== */
 function renderBags(){
  bagsDiv.innerHTML="";
  for(let i=0;i<8;i++){
-  if(destroyedBags.includes(i)) continue;
+  if(destroyed.includes(i)) continue;
   bagsDiv.innerHTML+=`
    <div class="bag" onclick="openBag(${i})">
     <span>🦠</span><br>Tế bào ${i+1}
@@ -139,26 +134,28 @@ function renderBags(){
  }
 }
 
-/* ===================== OPEN BAG ===================== */
-function openBag(bagIndex){
- if(questionPool.length === 0){
-   alert("Đã hết câu hỏi!");
-   return;
- }
-
- const q = questionPool.shift(); // ❗ LẤY & LOẠI LUÔN
- usedQuestions.push(q);
+function openBag(i){
+ const q=pool[i];
+ if(!q) return;
 
  home.classList.add("hidden");
  question.classList.remove("hidden");
- qBox.innerHTML = "<h2>"+q.q+"</h2>";
+ qBox.innerHTML="<h2>"+q.q+"</h2>";
 
  if(q.type==="mc"){
-  shuffle(q.o).forEach(op=>{
-   qBox.innerHTML+=`
-    <div class="option" onclick="${op===q.a?'win':'lose'}(${bagIndex})">
-     <b>${"ABCD"[q.o.indexOf(op)]}.</b> ${op}
-    </div>`;
+  q.o.forEach((op,idx)=>{
+   const d=document.createElement("div");
+   d.className="option";
+   d.innerHTML=`<b>${"ABCD"[idx]}.</b> ${op}`;
+   d.onclick=()=>{
+    if(idx===q.a){
+     d.classList.add("correct");
+     win(i);
+    }else{
+     flash(d);
+    }
+   };
+   qBox.appendChild(d);
   });
  }
 
@@ -166,28 +163,56 @@ function openBag(bagIndex){
   qBox.innerHTML+=`
    <input id="ans">
    <br>
-   <button onclick="checkShort(${bagIndex},'${q.a}')">Xác nhận</button>
+   <button onclick="checkShort(${i},'${q.a}')">Xác nhận</button>
    <button onclick="document.getElementById('real').classList.toggle('hidden')">Xem đáp án</button>
    <div id="real" class="hidden">Đáp án: ${q.a}</div>`;
  }
 
  if(q.type==="tf"){
-  shuffle(q.s).forEach(([t,a])=>{
-   qBox.innerHTML+=`
-   <div class="statement">${t}
+  let correctSet=new Set();
+  q.s.forEach(([t,a],idx)=>{
+   const row=document.createElement("div");
+   row.className="statement";
+   row.innerHTML=`${t}
     <div class="tf">
-     <button onclick="${a?'tfOk':'tfFail'}(${bagIndex})">Đúng</button>
-     <button onclick="${!a?'tfOk':'tfFail'}(${bagIndex})">Sai</button>
-    </div>
-   </div>`;
+     <button>Đúng</button>
+     <button>Sai</button>
+    </div>`;
+   const [bT,bF]=row.querySelectorAll("button");
+
+   bT.onclick=()=>handleTF(idx,a,true,bT);
+   bF.onclick=()=>handleTF(idx,a,false,bF);
+
+   qBox.appendChild(row);
   });
+
+  function handleTF(id,ans,choose,btn){
+   if(ans===choose && !correctSet.has(id)){
+    correctSet.add(id);
+    btn.classList.add("correct");
+    if(correctSet.size===4) win(i);
+   }else if(ans!==choose){
+    flash(btn);
+   }
+  }
  }
 }
 
-/* ===================== RESULT ===================== */
+function flash(el){
+ el.classList.add("wrong");
+ setTimeout(()=>el.classList.remove("wrong"),400);
+}
+
+function checkShort(i,a){
+ const v=document.getElementById("ans").value.toLowerCase().trim();
+ if(v===a) win(i);
+ else flash(document.getElementById("ans"));
+}
+
 function win(i){
  sound.play();
- destroyedBags.push(i);
+ destroyed.push(i);
+ pool[i]=null;
  question.classList.add("hidden");
  successBox.classList.remove("hidden");
  setTimeout(()=>{
@@ -196,21 +221,6 @@ function win(i){
   renderBags();
  },1200);
 }
-
-function lose(){
- question.classList.add("hidden");
- msg.classList.remove("hidden");
- setTimeout(()=>{
-  msg.classList.add("hidden");
-  home.classList.remove("hidden");
- },1200);
-}
-
-const tfOk = () => {};
-const tfFail = () => lose();
-const checkShort = (i,a)=>{
- document.getElementById("ans").value.toLowerCase().trim()===a?win(i):lose();
-};
 
 renderBags();
 </script>
